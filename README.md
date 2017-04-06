@@ -11,7 +11,7 @@ Containing:
 
 Environment:
 
-Windows 7, pyhton 3.4, 
+Windows 7, python 3.4, 
 
 python modules: Visa, matplotlib, numpy, pylab
 
