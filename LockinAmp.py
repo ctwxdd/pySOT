@@ -2,7 +2,8 @@
 # 01/25/2017 Selection of sensitivity (mVs and uVs) now added.
 # 01/25/2017 Number of averages added.
 # 01/26/2017 Lock-in OSC signal options (amplitude, frequency) added.
-# 01/26/2017 Lcok-in DAC channel (DAC1 to DAC4) option added.
+# 01/26/2017 Lock-in DAC channel (DAC1 to DAC4) option added.
+# 03/31/2017 Lock-in '0.0E+00\x00\r\n' error avoided.
 
 import visa
 import time
@@ -31,8 +32,9 @@ class lockinAmp():
         self.sr.write("DISPOUT2 4")
         self.sr.write("DISPOUT3 10")
 
-        #Set signal channel to "A-B"
-        self.sr.write("VMODE 3")
+        #Set signal channel to
+        #self.sr.write("VMODE 1") #A
+        self.sr.write("VMODE 3") #A-B
 
         #Setting up AC Gain and Time Constant
         #self.sr.write("AUTOMATIC 1")
@@ -174,7 +176,14 @@ class lockinAmp():
 
         while i<=N:
 
-            data=data+float(self.sr.query("X."))
+            tmp=self.sr.query("X.")
+
+            if tmp=='0.0E+00\x00\r\n':
+                tmp=0
+            else:
+                tmp=float(tmp)
+
+            data=data+tmp
             i+=1
             
         return float(data/average)

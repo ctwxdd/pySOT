@@ -9,12 +9,6 @@
 # Note: All output will be shut down by clicking quit
 # Note: Create the K2400 current stepping function
 
-#********************** 2017/03/30 Version ********************#
-
-# Note: Modification on data plots (dots and lines)
-# Note: Saving files with date and time
-
-
 from tkinter import *
 from tkinter import ttk
 import tkinter
@@ -109,7 +103,7 @@ def measureUpdate(i,lim):
     qx.put('Q')
 
 
-def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx):
+def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _current, _step,_pulse_length,_rest_length,_Hx, _dHx, _intervalx):
     
 
     i=float(_inteval)
@@ -125,129 +119,127 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
         Hx_end=float(_Hx)*(-1)
         Hx_step=float(_dHx)
 
-        keith=Keithley2400(f) #Initiate K2400
+        keith=Keithley2400('CURR') #Initiate K2400
         amp = lockinAmp(func, sense, signal, freq) #Initiate Lock-in
 
         while Hx_start>=Hx_end:
 
             amp.dacOutput((Hx_start/ix), DACx)
 
-            current_start=float(_current)
-            current_end=float(_current)*(-1)
+            current_max=float(_current)
+            current_min=float(_current)*(-1)
             current_step=float(_step)
     
-            while current_start>=current_end:
+            #while current_start>=current_end:
 
-                ax.clear()
-                ax.grid(True)
-                ax.set_title("Realtime Hall voltage vs H Plot")
-                ax.set_xlabel("Applied Field (Oe)")
-                ax.set_ylabel("Lock-In X (mV)")
+            ax.clear()
+            ax.grid(True)
+            ax.set_title("Realtime Resistance vs I Plot")
+            ax.set_xlabel("Applied Pulsed Current (mA)")
+            ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
 
-                listbox_l.insert('end',"Now measuring with Hx = %f (Oe) and Idc = %f (mA) " %(Hx_start,current_start))
-                listbox_l.see(END)
-                
-                #Prepare data entries
-                global values_x, values_y, result
-
-                values_y=[]
-                values_x=[]
-                result=[]
-                
-                #Setup K2400 for current output and resistance measurement
-                keith.setCurrent(current_start)
-                keith.outputOn()
-
-                index=1
-                data=[]
-
-                while index<=5: #Average of five measurements
-                    data=data+keith.measureOnce()
-                    index+=1
+            listbox_l.insert('end',"Now measuring with Hx = %f (Oe)" %Hx_start)
+            listbox_l.see(END)
             
-                print("Measured current: %f mA" %(1000*data[2]))
-                print("Measured voltage: %f V" %data[1])
-                print("Measured resistance: %f Ohm" %(data[1]/data[2]))
+            #Prepare data entries
+            global values_x, values_y, result
 
-                #Setup lock-in for dac (Hz field) output
-                t=0
-                a=0.0
-                step = (double(_output)/i)/n
+            values_y=[]
+            values_x=[]
+            result=[]
+            
+            #Setup K2400 for current output and resistance measurement
+            keith.setCurrent(0.1) #Use 0.1mA to measure DC resistance 
+            keith.outputOn()
+
+            index=1
+            data=[]
+
+            while index<=5: #Average of five measurements
+                data=data+keith.measureOnce()
+                index+=1
         
-                while t < n :
+            print("Measured current: %f mA" %(1000*data[2]))
+            print("Measured voltage: %f V" %data[1])
+            print("Measured resistance: %f Ohm" %(data[1]/data[2]))
 
-                    amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average)) #in units of mV
-                    result.append(tmp)
-                    values_y.append(tmp)
-                    values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
-                    canvas.draw()
-                    listbox_l.insert('end', tmp)
-                    t+=1
-                    a+=step
-                    listbox_l.see(END)
-
-                while t < 3*n :
-
-                    amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average))
-                    result.append(tmp)
-                    values_y.append(tmp)
-                    values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
-                    canvas.draw()
-                    listbox_l.insert('end', tmp)
-                    t+=1
-                    a-=step
-                    listbox_l.see(END)
-
-                while t <= 4*n :
-
-                    amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average))
-                    result.append(tmp)
-                    values_y.append(tmp)
-                    values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
-                    canvas.draw()
-                    listbox_l.insert('end', tmp)
-                    t+=1
-                    a+=step
-                    listbox_l.see(END)
-
-                #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
-                #canvas.draw()
-
-                #Setup timestamp
-                stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-                listbox_l.insert('end', str(stamp))
-
-                file = open(str(directory)+"/sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
-                file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
-                file.write("Applied current: "+str(current_start)+"(mA)\n\n")
-                file.write("Number"+" "+"Field(Oe)"+" "+"Voltage(mV)"+"\n")
-
-                cnt=1
-                #output all data 
-                for a in range(len(values_y)):
-
-                    file.write(str(cnt)+" "+str(values_x[a])+" "+str(values_y[a])+"\n")
-                    cnt +=1
-
-                file.closed
-
-                listbox_l.insert('end', "The Measurement data is saved.")
+            #Setup Keithley for Idc sweep
+            current=0
+            
+            trigger_delay=float(_rest_length)
+            source_delay=float(_pulse_length)
+    
+            while current < current_max :
+                
+                keith.pulse(current,current_max, trigger_delay, source_delay)
+                data=keith.measureOnce()
+                tmp=double(data[1]/data[2]) #Resistance from K2400
+                result.append(tmp)
+                values_y.append(tmp)
+                values_x.append(current)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                canvas.draw()
+                listbox_l.insert('end', tmp)
+                current+=current_step
                 listbox_l.see(END)
 
-                keith.outputOff()
-                current_start=current_start-current_step
+            while current > -current_max:
 
-                time.sleep(1) #Sleep between each scan
+            
+                keith.pulse(current,current_max, trigger_delay, source_delay)
+                data=keith.measureOnce()
+                tmp=double(data[1]/data[2]) #Resistance from K2400
+                result.append(tmp)
+                values_y.append(tmp)
+                values_x.append(current)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                canvas.draw()
+                listbox_l.insert('end', tmp)
+                current-=current_step
+                listbox_l.see(END)
 
+            while current <= 0 :
+
+                keith.pulse(current, current_max, trigger_delay, source_delay)
+                data=keith.measureOnce()
+                tmp=double(data[1]/data[2]) #Resistance from K2400
+                result.append(tmp)
+                values_y.append(tmp)
+                values_x.append(current)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                canvas.draw()
+                listbox_l.insert('end', tmp)
+                current+=current_step
+                listbox_l.see(END)
+
+            #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
+            #canvas.draw()
+
+            stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+            listbox_l.insert('end', str(stamp))
+
+            file = open(str(directory)+"/MR_STT_pulsed_switching_"+str(Hx_start)+"Oe_"+str(source_delay)+"s_"+str(stamp), "w")
+            file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n\n")
+            file.write("Number"+" "+"Current(mA)"+" "+"Resistance(Ohm)"+"\n")
+
+            cnt=1
+            #output all data 
+            for a in range(len(values_y)):
+
+                file.write(str(cnt)+" "+str(values_x[a])+" "+str(values_y[a])+"\n")
+                cnt +=1
+
+            file.closed
+
+            listbox_l.insert('end', "The Measurement data is saved.")
+            listbox_l.see(END)
+
+            keith.outputOff()
+
+            time.sleep(1) #Sleep between each scan
 
             Hx_start=Hx_start-Hx_step
 
@@ -370,9 +362,9 @@ def clearMethod():
     
     ax.clear()
     ax.grid(True)
-    ax.set_title("Realtime Hall voltage vs H Plot")
-    ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Lock-In X (mV)")
+    ax.set_title("Realtime Resistance vs I Plot")
+    ax.set_xlabel("Applied Pulsed Current (mA)")
+    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
     
     canvas.draw()
@@ -408,9 +400,9 @@ def createWidgit():
 
     ax = fig.add_subplot(111)
     ax.grid(True)
-    ax.set_title("Realtime Hall voltage vs H Plot")
-    ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Lock-In X (mV)")
+    ax.set_title("Realtime Resistance vs I Plot")
+    ax.set_xlabel("Applied Pulsed Current (mA)")
+    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
 
 
@@ -430,6 +422,8 @@ def createWidgit():
     entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
     entry_current = ttk.Entry(frame_setting); entry_current.insert(0,"0")
     entry_step = ttk.Entry(frame_setting); entry_step.insert(0,"0.5")
+    entry_pulse_length = ttk.Entry(frame_setting); entry_pulse_length.insert(0,"0.01")
+    entry_rest_length = ttk.Entry(frame_setting); entry_rest_length.insert(0,"0.01")
     entry_Hx = ttk.Entry(frame_setting); entry_Hx.insert(0,"0")
     entry_dHx = ttk.Entry(frame_setting); entry_dHx.insert(0,"100")
     entry_intervalx = ttk.Entry(frame_setting);entry_intervalx.insert(0,"396.59")
@@ -464,13 +458,15 @@ def createWidgit():
     label_dacx = ttk.Label(frame_setting, text="Hx DAC Channel:")
     label_current = ttk.Label(frame_setting, text="Current (mA):")
     label_step = ttk.Label(frame_setting, text="Current step (mA):")
+    label_pulse_length = ttk.Label(frame_setting, text="pulse length(s)")
+    label_rest_length= ttk.Label(frame_setting, text="rest length(s)")
     label_Hx = ttk.Label(frame_setting, text="Hx field (Oe):")
     label_dHx = ttk.Label(frame_setting, text="Hx step (Oe):")
     label_intervalx = ttk.Label(frame_setting, text="Hx(Oe)/DAC(V):")
     label_empty = ttk.Label(frame_setting, text="")
     
     
-    button_measure = ttk.Button(frame_buttomArea, text ="Measure", command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get()))
+    button_measure = ttk.Button(frame_buttomArea, text ="Measure", command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),entry_step.get(),entry_pulse_length.get(),entry_rest_length.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
@@ -511,17 +507,21 @@ def createWidgit():
     entry_current.grid(column=0, row=22, columnspan=2, sticky=(N, W), padx=5)
     label_step.grid(column=0, row=23, columnspan=2, sticky=(N, W), padx=5)
     entry_step.grid(column=0, row=24, columnspan=2, sticky=(N, W), padx=5)
-    label_Hx.grid(column=0, row=25, columnspan=2, sticky=(N, W), padx=5)
-    entry_Hx.grid(column=0, row=26, columnspan=2, sticky=(N, W), padx=5)
-    label_dHx.grid(column=0, row=27, columnspan=2, sticky=(N, W), padx=5)
-    entry_dHx.grid(column=0, row=28, columnspan=2, sticky=(N, W), padx=5)
-    label_intervalx.grid(column=0, row=29, columnspan=2, sticky=(N, W), padx=5)
-    entry_intervalx.grid(column=0, row=30, columnspan=2, sticky=(N, W), padx=5)
+    label_pulse_length.grid(column=0, row=25, columnspan=2, sticky=(N, W), padx=5)
+    entry_pulse_length.grid(column=0, row=26, columnspan=2, sticky=(N, W), padx=5)
+    label_rest_length.grid(column=0, row=27, columnspan=2, sticky=(N, W), padx=5)
+    entry_rest_length.grid(column=0, row=28, columnspan=2, sticky=(N, W), padx=5)
+    label_Hx.grid(column=0, row=29, columnspan=2, sticky=(N, W), padx=5)
+    entry_Hx.grid(column=0, row=30, columnspan=2, sticky=(N, W), padx=5)
+    label_dHx.grid(column=0, row=31, columnspan=2, sticky=(N, W), padx=5)
+    entry_dHx.grid(column=0, row=32, columnspan=2, sticky=(N, W), padx=5)
+    label_intervalx.grid(column=0, row=33, columnspan=2, sticky=(N, W), padx=5)
+    entry_intervalx.grid(column=0, row=34, columnspan=2, sticky=(N, W), padx=5)
 
-    label_empty.grid(column=0, row=31, columnspan=2, sticky=(N, W), padx=5)
+    label_empty.grid(column=0, row=35, columnspan=2, sticky=(N, W), padx=5)
 
 
-    frame_information.grid(column=0, row=31,columnspan=3,sticky=(N,W,E,S))
+    frame_information.grid(column=0, row=25,columnspan=3,sticky=(N,W,E,S))
 
     listbox_l.grid(column=0, row=0,columnspan=3,sticky=(N,W,E,S))
     scrollbar_s.grid(column=1, row=0, sticky=(N,S))
@@ -532,7 +532,7 @@ def createWidgit():
     frame_information.grid_rowconfigure(0, weight=1)
     
 
-    frame_buttomArea.grid(column =3, row=31,columnspan=2,sticky=(N, S, E, W))
+    frame_buttomArea.grid(column =3, row=33,columnspan=2,sticky=(N, S, E, W))
 
     button_output.grid(column=0, row=0,columnspan = 2,sticky=(N, S, E, W))
     button_measure.grid(column =0, row=1, columnspan = 2,sticky=(N, S, E, W))
@@ -551,9 +551,12 @@ def createWidgit():
     content.columnconfigure(4, weight=1)
     content.rowconfigure(1, weight=1)
 
+   
+    
 if __name__ == '__main__':
     main()
-
+    
+    
 
 
 

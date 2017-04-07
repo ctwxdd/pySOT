@@ -140,9 +140,9 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
 
                 ax.clear()
                 ax.grid(True)
-                ax.set_title("Realtime Hall voltage vs H Plot")
+                ax.set_title("Realtime Resistance vs H Plot")
                 ax.set_xlabel("Applied Field (Oe)")
-                ax.set_ylabel("Lock-In X (mV)")
+                ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
 
                 listbox_l.insert('end',"Now measuring with Hx = %f (Oe) and Idc = %f (mA) " %(Hx_start,current_start))
                 listbox_l.see(END)
@@ -177,7 +177,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 while t < n :
 
                     amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average)) #in units of mV
+                    data=keith.measureOnce()
+                    tmp=double(data[1]/data[2]) #Resistance from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -192,7 +193,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 while t < 3*n :
 
                     amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average))
+                    data=keith.measureOnce()
+                    tmp=double(data[1]/data[2]) #Resistance from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -207,7 +209,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 while t <= 4*n :
 
                     amp.dacOutput(a, DAC)
-                    tmp=1000*double(amp.readX(average))
+                    data=keith.measureOnce()
+                    tmp=double(data[1]/data[2]) #Resistance from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -226,10 +229,10 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
                 listbox_l.insert('end', str(stamp))
 
-                file = open(str(directory)+"/sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
+                file = open(str(directory)+"/MR_sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
                 file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
                 file.write("Applied current: "+str(current_start)+"(mA)\n\n")
-                file.write("Number"+" "+"Field(Oe)"+" "+"Voltage(mV)"+"\n")
+                file.write("Number"+" "+"Field(Oe)"+" "+"Resistance(Ohm)"+"\n")
 
                 cnt=1
                 #output all data 
@@ -370,9 +373,9 @@ def clearMethod():
     
     ax.clear()
     ax.grid(True)
-    ax.set_title("Realtime Hall voltage vs H Plot")
+    ax.set_title("Realtime Resistance vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Lock-In X (mV)")
+    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
     
     canvas.draw()
@@ -408,9 +411,9 @@ def createWidgit():
 
     ax = fig.add_subplot(111)
     ax.grid(True)
-    ax.set_title("Realtime Hall voltage vs H Plot")
+    ax.set_title("Realtime Resistance vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Lock-In X (mV)")
+    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
 
 
