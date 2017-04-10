@@ -69,7 +69,7 @@ screen_height = root.winfo_screenheight()
 
 def main():
 
-    global result, func, average, sense, DAC, signal, freq, qx, qy
+    global result, func, average, sense, DAC, signal, freq, qx, qy, dot_size, dot_edge
 
     qx = multiprocessing.Queue()
     qy = multiprocessing.Queue()
@@ -79,6 +79,9 @@ def main():
     DAC=2 #Set a default DAC output channel
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
+
+    dot_size=10 #Set a default data dot size
+    dot_edge=0.5 #Set a default data dot edge width
     
     result=['']
     values_y=[]
@@ -234,7 +237,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(a*i)
-                ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                 canvas.draw()
                 listbox_l.insert('end', tmp)
                 t+=1
@@ -248,7 +252,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(a*i)
-                ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                 canvas.draw()
                 listbox_l.insert('end', tmp)
                 t+=1
@@ -262,7 +267,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(a*i)
-                ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                 canvas.draw()
                 listbox_l.insert('end', tmp)
                 t+=1
