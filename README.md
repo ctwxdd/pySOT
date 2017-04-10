@@ -1,4 +1,4 @@
-A simple implementation of tkinter GUI for spintronic and electronic devices measurements.
+A simple implementation of tkinter GUI for magnetic, spintronic and electronic devices measurements.
 
 Controlling Keithley 2400, Signal Recovery 7265 Lock-In amplifier thorugh National Instrument's NI GPIB-USB-HS GPIB control device.
 
