@@ -23,4 +23,4 @@ References: <br />
 [4] Pai et. al., Physical Review B 93, 144409 (2016) https://doi.org/10.1103/PhysRevB.93.144409 <br />
 
 
-![alt tag](http://i.imgur.com/rZLbKa7.jpg)
+![alt tag](http://140.112.32.1/~cfpai/wfMOKE.png)
