@@ -27,6 +27,7 @@ import time
 import multiprocessing
 import threading
 import pyscreenshot as ImageGrab
+from datetime import datetime
 
 root = Tk()
 
@@ -36,9 +37,6 @@ x2=1206
 y2=428
 
 def click(root2):
-	listbox_l.insert('end',"X1: %d, Y1: %d" %(root2.winfo_x(), root2.winfo_y()))
-	listbox_l.insert('end',"X2: %d, Y2: %d" %(root2.winfo_x()+root2.winfo_width(), root2.winfo_y()+root2.winfo_height()))
-
     print("X1: %d, Y1: %d" %(root2.winfo_x(), root2.winfo_y()))
     print("X2: %d, Y2: %d\n" %(root2.winfo_x()+root2.winfo_width(), root2.winfo_y()+root2.winfo_height()))
     global y1
@@ -276,8 +274,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
 
             #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
             #canvas.draw()
-
-            file = open(str(directory)+"/sample_name_switching"+str(Hx_start)+"Oe", "w")
+            stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+            file = open(str(directory)+"/sample_name_switching"+str(Hx_start)+"Oe"+"_"+str(stamp), "w")
             file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n\n")
             file.write("Number"+" "+"Field(Oe)"+" "+"MOKE signal(RGB)"+"\n")
 

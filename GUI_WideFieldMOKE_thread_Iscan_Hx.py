@@ -27,6 +27,8 @@ import time
 import multiprocessing
 import threading
 import pyscreenshot as ImageGrab
+from datetime import datetime
+
 
 root = Tk()
 
@@ -53,10 +55,10 @@ def perfSettings():
 
     perfFrame.title("Determine Capture Area Coordinates")
     perfFrame.configure(bg='#F2F2F2')
-    perfFrame.geometry("400x200")
+    perfFrame.geometry("200x150")
 
 
-    btn = ttk.Button(master=perfFrame, text='box', command = lambda : click(perfFrame), width=37)
+    btn = ttk.Button(master=perfFrame, text='box', command = lambda : click(perfFrame), width=10)
     btn.pack()
     perfFrame.protocol('WM_DELETE_WINDOW', quit) 
     perfFrame.mainloop()
@@ -67,7 +69,7 @@ screen_height = root.winfo_screenheight()
 
 def main():
 
-    global result, func, average, sense, DAC, DACx, signal, freq, qx, qy, directory
+    global result, func, average, sense, DAC, DACx, signal, freq, qx, qy, directory, dot_size, dot_edge
 
     directory = os.getcwd()
 
@@ -80,6 +82,9 @@ def main():
     DACx=3 #Set a default DAC output channel for Hx
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
+
+    dot_size=10 #Set a default data dot size
+    dot_edge=0.5 #Set a default data dot edge width
     
     result=['']
     values_y=[]
@@ -240,7 +245,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -254,7 +260,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -268,7 +275,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
+                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -277,8 +285,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
 
                 #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
                 #canvas.draw()
-
-                file = open(str(directory)+"/sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA", "w")
+                stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+                file = open(str(directory)+"/sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA"+"_"+str(stamp), "w")
                 file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
                 file.write("Applied current: "+str(current_start)+"(mA)\n\n")
                 file.write("Number"+" "+"Field(Oe)"+" "+"Voltage(mV)"+"\n")
@@ -475,7 +483,7 @@ def createWidgit():
     frame_buttomArea = ttk.Frame(content)
 
     entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
-    entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"429.82")
+    entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
     entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
     entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"3")
     entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
