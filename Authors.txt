@@ -1,5 +1,6 @@
 Contributor list:
 
-1. Nick Wu
+1. Nick Chun-Ting Wu
 2. Chi-Feng Pai
-3. 蔡宗佑
+3. Neil Murray
+4. Tsung-Yu Tsai
