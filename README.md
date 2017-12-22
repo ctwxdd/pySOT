@@ -15,7 +15,7 @@ Environment:
 
 Windows 10, python 3.4, 
 
-python modules: Visa, matplotlib, numpy, pylab
+python modules: Visa, matplotlib, numpy, pylab, pyscreenshot
 
 References: <br />
 [1] Kim et. al., Nature Materials  12, 240–245 (2013) https://doi.org/10.1038/nmat3522 <br />
