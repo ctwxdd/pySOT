@@ -4,20 +4,23 @@
 # Note: The listbox will now always show the latest measured data
 # Note: Threading can avoid non-responsive problem, but will also cause
 #       the intereference by clicking other buttons during measurement.
-# Note: Keithley current option added.
+# Note: Keithley2400 current option added.
 # Note: All output will be shut down by clicking quit
 # Note: Create the K2400 current stepping function
 
-#********************** 2017/03/30 Version ********************#
+#********************** 2017/03/27 Version ********************#
 # Note: Modification on data plots (dots and lines)
+# Note: Keithley2000 for photovoltage read-out, using measureMulti(average)
 # Note: Saving files with date and time
 
-#********************** 2018/01/11 Version ********************#
-# Note: Added comments for clarity
+#********************** 2017/04/11 Version ********************#
+# Note: Saving image file at the same time
+
+#********************** 2018/01/12 Version ********************#
+# Note: Voltage Protection added 2017/12/19
 # Note: Cleaned up code for easier reading
 # Note: Unnecessary variables removed
-# Note: Amplifier protect added.
-# Note: Save function updated to include sample name
+# Note: Save function updated to include sample name and initial resistance 
 # Note: Read me added
 
 
@@ -35,6 +38,7 @@ import math
 import numpy
 from LockinAmp import lockinAmp
 from keithley2400_I import Keithley2400
+from keithley import Keithley
 import time
 import multiprocessing
 import threading
@@ -51,12 +55,12 @@ def main():
 
     func='1st' #Set a default mode (1st or 2nd)
     sense='10mV' #Set a default sensitivity range (mV or uV)
-    DAC=2 #Set a default DAC output channel for Hz
+    DAC=1 #Set a default DAC output channel for Hz
     DACx=3 #Set a default DAC output channel for Hx
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
 
-    read_me = 'This program uses Keithley2400 to provide a current to the device. Keithley2400 also measures the resistance of the device \
+    read_me = 'This program uses Keithley2400 to provide a current to the device. Keithley2000 provides 2 wire voltage measurements \
     and the Lock-In Amp provides Hx and Hz fields of varying strength.'
 
     print(read_me)
@@ -75,23 +79,24 @@ def main():
 
 #************************Main End Here***************************#
 
-
+# Uses Keithley2000 for voltage measurements, Keithley2400 for applying current, Lock-In Amp for Hx and Hz
 def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx, _sample):
     
 
     i=float(_interval) # Hz calibration factor
     ix=float(_intervalx) # Hx calibration factor
-    n=int(_number) # number of points scanned per Hz sweep
-    average=int(_average) # NOT CURRENTLY USED IN THIS PROGRAM
-    signal=float(_signal) # Lock-In Amp OSC signal voltage (MAX 5)
-    freq=int(_frequency) # Lock-In Amp OSC signal frequency (Hz)
+    n=int(_number) # number of points measured per Hz field sweep
+    average=int(_average) # number of averaged measurements for Keithley2000
+    signal=float(_signal) # Lock-in Amp OSC signal voltage (MAX 5 V)
+    freq=int(_frequency) # Lock-in Amp OSC frequency (Hz)
 
     def event():
 
-        Hx_start=float(_Hx) # Max Hx value
+        Hx_start=float(_Hx) # Max Hx field strength
         Hx_end=float(_Hx)*(-1)
         Hx_step=float(_dHx)
 
+        keith1=Keithley('voltage') #Initiate K2000 to voltage measurement
         keith=Keithley2400(f) #Initiate K2400
         amp = lockinAmp(func, sense, signal, freq) #Initiate Lock-in
 
@@ -99,7 +104,7 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
 
             amp.dacOutput((Hx_start/ix), DACx)
 
-            current_start=float(_current)
+            current_start=float(_current) 
             current_end=float(_current)*(-1)
             current_step=float(_step)
     
@@ -107,9 +112,9 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
 
                 ax.clear()
                 ax.grid(True)
-                ax.set_title("Realtime Resistance vs H Plot")
+                ax.set_title("Realtime photo-voltage vs H Plot")
                 ax.set_xlabel("Applied Field (Oe)")
-                ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+                ax.set_ylabel("Photo-voltage (V)")
 
                 listbox_l.insert('end',"Now measuring with Hx = %f (Oe) and Idc = %f (mA) " %(Hx_start,current_start))
                 listbox_l.see(END)
@@ -136,6 +141,8 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 print("Measured voltage: %f V" %data[1])
                 print("Measured resistance: %f Ohm" %(data[1]/data[2]))
 
+                save = (data[1]/data[2])
+
                 #Setup lock-in for dac (Hz field) output
                 t=0
                 a=0.0
@@ -144,13 +151,12 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t < n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    tmp=keith1.measureMulti(average) #Keithley2000 2-wire voltage
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=dot_size, c='red', alpha=0.5)
+                    ax.plot(values_x, values_y,'r-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -160,13 +166,12 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t < 3*n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    tmp=keith1.measureMulti(average) #Keithley2000 2-wire voltage
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=dot_size, c='red', alpha=0.5)
+                    ax.plot(values_x, values_y,'r-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -176,13 +181,12 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t <= 4*n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    tmp=keith1.measureMulti(average) #Keithley2000 2-wire voltage
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
-                    #ax.scatter(values_x[-1], values_y[-1], s=50, alpha=0.5)
-                    ax.plot(values_x, values_y,'b-o', ms=dot_size, mew=dot_edge, alpha=0.5)
+                    #ax.scatter(values_x[-1], values_y[-1], s=dot_size, c='red', alpha=0.5)
+                    ax.plot(values_x, values_y,'r-o', ms=dot_size, mew=dot_edge, alpha=0.5)
                     canvas.draw()
                     listbox_l.insert('end', tmp)
                     t+=1
@@ -194,11 +198,12 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
                 listbox_l.insert('end', str(stamp))
 
-                file = open(str(directory)+"/MR_"+str(_sample)+"_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
+                file = open(str(directory)+"/LaserMOKE_"+str(_sample)+"_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
                 file.write(str(_sample)+"\n")
+                file.write("Initial resistance: " + str(save) + "(Ohm)\n")
                 file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
                 file.write("Applied current: "+str(current_start)+"(mA)\n\n")
-                file.write("Number"+" "+"Field(Oe)"+" "+"Resistance(Ohm)"+"\n")
+                file.write("Number"+" "+"Field(Oe)"+" "+"Voltage(V)"+"\n")
 
                 cnt=1
                 #output all data 
@@ -208,6 +213,9 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                     cnt +=1
 
                 file.closed
+
+                #Save image file
+                fig.savefig(str(directory)+"/LaserMOKE_"+str(_sample)+"_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp)+".JPG")
 
                 listbox_l.insert('end', "The Measurement data is saved.")
                 listbox_l.see(END)
@@ -308,9 +316,9 @@ def clearMethod():
     
     ax.clear()
     ax.grid(True)
-    ax.set_title("Realtime Resistance vs H Plot")
+    ax.set_title("Realtime photo-voltage vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+    ax.set_ylabel("Photo-voltage (V)")
     ax.axis([-1, 1, -1, 1])
     
     canvas.draw()
@@ -340,15 +348,15 @@ def quitMethod():
 
 def createWidgit():
 
-    global ax, canvas, listbox_l, result, func, frame, sense
+    global ax, canvas, listbox_l, result, func, frame, sense, fig
 
     fig = pylab.figure(1)
 
     ax = fig.add_subplot(111)
     ax.grid(True)
-    ax.set_title("Realtime Resistance vs H Plot")
+    ax.set_title("Realtime photo-voltage vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+    ax.set_ylabel("Photo-voltage (V)")
     ax.axis([-1, 1, -1, 1])
 
 
@@ -362,11 +370,11 @@ def createWidgit():
 
     #Save Variables
     entry_sample = ttk.Entry(frame_information); entry_sample.insert(0, "sample name")
-    
-    #Function Variables 
-    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
+
+    #Function Variables
+    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"25")
     entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
-    entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
+    entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"50")
     entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"3")
     entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
     entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
@@ -383,7 +391,7 @@ def createWidgit():
 
     mode = ["1st","1st","2nd"]
     sensitivity = ["10mV","1mV","2mV","5mV","10mV","20mV","50mV","100mV","200mV","10uV","20uV","50uV","100uV"]
-    dac = [2,1,2,3,4]
+    dac = [1,1,2,3,4]
     dacx = [3,1,2,3,4]
 
     option_mode = ttk.OptionMenu(frame_setting, value, *mode, command = optionMethod)
@@ -394,10 +402,6 @@ def createWidgit():
     listbox_l = Listbox(frame_information,height=5)
     scrollbar_s = ttk.Scrollbar(frame_information, orient=VERTICAL, command=listbox_l.yview)
 
-    #Save File Name
-    label_sample = ttk.Label(frame_information, text = "Sample Name")
-
-    #Function Variables
     label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
     label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
     label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
@@ -417,9 +421,9 @@ def createWidgit():
     
     
     button_measure = ttk.Button(frame_buttomArea, text ="Measure", \
-        command = lambda : measureMethod(entry_interval.get(),entry_number.get(),\
-            entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),\
-            entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
+        command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),\
+            entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),\
+            entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
@@ -435,6 +439,9 @@ def createWidgit():
 
 
     frame_setting.grid(column=3, row=0, columnspan=2, rowspan=30, sticky=(N, S, E, W))
+
+    #Save setings
+    label_sample = ttk.Label(frame_information, text = "Sample Name")
 
     #Frame setting grid
     label_mode.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)

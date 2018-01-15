@@ -12,6 +12,9 @@
 # Note: Modification on data plots (dots and lines)
 # Note: Saving files with date and time
 
+#********************** 2017/06/15 Version ********************#
+# Note: Saving files with measured channel resistance
+
 #********************** 2018/01/11 Version ********************#
 # Note: Added comments for clarity
 # Note: Cleaned up code for easier reading
@@ -35,6 +38,7 @@ import math
 import numpy
 from LockinAmp import lockinAmp
 from keithley2400_I import Keithley2400
+from keithley import Keithley
 import time
 import multiprocessing
 import threading
@@ -49,6 +53,7 @@ def main():
     directory = os.getcwd()
 
 
+
     func='1st' #Set a default mode (1st or 2nd)
     sense='10mV' #Set a default sensitivity range (mV or uV)
     DAC=2 #Set a default DAC output channel for Hz
@@ -56,8 +61,8 @@ def main():
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
 
-    read_me = 'This program uses Keithley2400 to provide a current to the device. Keithley2400 also measures the resistance of the device \
-    and the Lock-In Amp provides Hx and Hz fields of varying strength.'
+    read_me = 'This program sweeps Hz over a range of currents supplied by Keithley2400 and a range of Hx values.\
+    Voltage measurements are taken by Keithley2000.'
 
     print(read_me)
 
@@ -76,23 +81,26 @@ def main():
 #************************Main End Here***************************#
 
 
-def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx, _sample):
+# Measures Voltage over series of Hz field strengths for set current and Hx field.
+def measureMethod(_interval, _number, _output, _average, _current, _step, _Hx, _dHx, _intervalx, _sample):
     
+    # _current: max and min values of current sweep, current supplied by Keithley2400
+    # _sense: sensitvity value for Lock-in Amp 
+    # _sample: sample name for save file
+    i=float(_interval) # Z field V/Oe conversion value
+    ix=float(_intervalx) # X field V/Oe conversion value
+    n=int(_number) # number of points measured in Hz field range
+    average=int(_average) # number of measurements averaged by Keithley2000
 
-    i=float(_interval) # Hz calibration factor
-    ix=float(_intervalx) # Hx calibration factor
-    n=int(_number) # number of points scanned per Hz sweep
-    average=int(_average) # NOT CURRENTLY USED IN THIS PROGRAM
-    signal=float(_signal) # Lock-In Amp OSC signal voltage (MAX 5)
-    freq=int(_frequency) # Lock-In Amp OSC signal frequency (Hz)
 
     def event():
 
-        Hx_start=float(_Hx) # Max Hx value
+        Hx_start=float(_Hx)
         Hx_end=float(_Hx)*(-1)
-        Hx_step=float(_dHx)
+        Hx_step=float(_dHx) # step value of Hx field
 
         keith=Keithley2400(f) #Initiate K2400
+        keith2000=Keithley(f) #Initiate K2000
         amp = lockinAmp(func, sense, signal, freq) #Initiate Lock-in
 
         while Hx_start>=Hx_end:
@@ -109,7 +117,7 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 ax.grid(True)
                 ax.set_title("Realtime Resistance vs H Plot")
                 ax.set_xlabel("Applied Field (Oe)")
-                ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+                ax.set_ylabel("Hall Resistance (Ohm)")
 
                 listbox_l.insert('end',"Now measuring with Hx = %f (Oe) and Idc = %f (mA) " %(Hx_start,current_start))
                 listbox_l.see(END)
@@ -122,6 +130,7 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 result=[]
                 
                 #Setup K2400 for current output and resistance measurement
+                keith.fourWireOff()
                 keith.setCurrent(current_start)
                 keith.outputOn()
 
@@ -136,6 +145,8 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 print("Measured voltage: %f V" %data[1])
                 print("Measured resistance: %f Ohm" %(data[1]/data[2]))
 
+                resistance = data[1]/data[2]
+
                 #Setup lock-in for dac (Hz field) output
                 t=0
                 a=0.0
@@ -144,8 +155,8 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t < n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    data=keith2000.measureMulti(average)
+                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -160,8 +171,8 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t < 3*n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    data=keith2000.measureMulti(average)
+                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -176,8 +187,8 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 while t <= 4*n :
 
                     amp.dacOutput(a, DAC)
-                    data=keith.measureOnce()
-                    tmp=double(data[1]/data[2]) #Resistance from K2400
+                    data=keith2000.measureMulti(average)
+                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -189,13 +200,12 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                     a+=step
                     listbox_l.see(END)
 
-
                 #Setup timestamp
                 stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
                 listbox_l.insert('end', str(stamp))
 
-                file = open(str(directory)+"/MR_"+str(_sample)+"_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
-                file.write(str(_sample)+"\n")
+                file = open(str(directory)+"/"+str(_sample)+"AHE_DC_"+str(resistance)+"Ohm_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(stamp), "w")
+                file.write("Sample name: "+str(_sample)+"\n")
                 file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
                 file.write("Applied current: "+str(current_start)+"(mA)\n\n")
                 file.write("Number"+" "+"Field(Oe)"+" "+"Resistance(Ohm)"+"\n")
@@ -212,7 +222,7 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
                 listbox_l.insert('end', "The Measurement data is saved.")
                 listbox_l.see(END)
 
-                keith.outputOff()
+                #keith.outputOff()
                 current_start=current_start-current_step
 
                 time.sleep(1) #Sleep between each scan
@@ -222,6 +232,10 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
 
         amp.dacOutput(0, DACx)
         amp.dacOutput(0, DAC)
+
+        keith.fourWireOff()
+        keith.outputOn()
+
         listbox_l.insert('end',"Measurement finished")
         listbox_l.see(END)
 
@@ -236,25 +250,6 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
         listbox_l.see(END)
         print("Your output field is TOO LARGE!")
 
-
-# Option:1st or 2nd harmonic
-def optionMethod(val):
-
-    global func 
-
-    func = val
-
-    print("Detecting the %s harmonic voltage" %func)
-    
-
-# Sensitivity: How many mVs or uVs
-def senseMethod(val):
-
-    global sense 
-
-    sense = val
-
-    print("Sensing range set to:",sense)
 
 # DAC: Which DAC output channel for Hz (Out-of-plane field)
 def dacMethod(val):
@@ -275,6 +270,7 @@ def dacxMethod(val):
 
     print("DAC channel for Hx:",DACx)
     print("Don't forget to change the calibration factor H(Oe)/DAC(V)")
+
 
 def dirMethod():
 
@@ -310,7 +306,7 @@ def clearMethod():
     ax.grid(True)
     ax.set_title("Realtime Resistance vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+    ax.set_ylabel("Hall Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
     
     canvas.draw()
@@ -325,10 +321,6 @@ def quitMethod():
     amp.dacOutput(0, 2)
     amp.dacOutput(0, 3)
     amp.dacOutput(0, 4)
-
-    keith=Keithley2400(f)
-    keith.setCurrent(0)
-    keith.outputOff()
 
     listbox_l.insert('end', "All fields set to zero.")
     listbox_l.see(END)
@@ -348,7 +340,7 @@ def createWidgit():
     ax.grid(True)
     ax.set_title("Realtime Resistance vs H Plot")
     ax.set_xlabel("Applied Field (Oe)")
-    ax.set_ylabel("Keithley 2400 Resistance (Ohm)")
+    ax.set_ylabel("Hall Resistance (Ohm)")
     ax.axis([-1, 1, -1, 1])
 
 
@@ -359,53 +351,42 @@ def createWidgit():
     frame_setting = ttk.Frame(content)
     frame_information = ttk.Frame(content, padding = (3,3,12,12)) 
     frame_buttomArea = ttk.Frame(content)
-
+    
     #Save Variables
     entry_sample = ttk.Entry(frame_information); entry_sample.insert(0, "sample name")
     
     #Function Variables 
-    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
+    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"40")
     entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
-    entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
-    entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"3")
-    entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
-    entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
-    entry_current = ttk.Entry(frame_setting); entry_current.insert(0,"0")
-    entry_step = ttk.Entry(frame_setting); entry_step.insert(0,"0.5")
+    entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"120")
+    entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"1")
+    entry_current = ttk.Entry(frame_setting); entry_current.insert(0,"0.1")
+    entry_step = ttk.Entry(frame_setting); entry_step.insert(0,"0.4")
     entry_Hx = ttk.Entry(frame_setting); entry_Hx.insert(0,"0")
     entry_dHx = ttk.Entry(frame_setting); entry_dHx.insert(0,"100")
     entry_intervalx = ttk.Entry(frame_setting);entry_intervalx.insert(0,"396.59")
 
-    value = tkinter.StringVar() #mode
-    value2 = tkinter.StringVar() #sensitivity
+
     value3 = tkinter.IntVar() #dac
     value4 = tkinter.StringVar() #keithOut
 
-    mode = ["1st","1st","2nd"]
-    sensitivity = ["10mV","1mV","2mV","5mV","10mV","20mV","50mV","100mV","200mV","10uV","20uV","50uV","100uV"]
     dac = [2,1,2,3,4]
     dacx = [3,1,2,3,4]
 
-    option_mode = ttk.OptionMenu(frame_setting, value, *mode, command = optionMethod)
-    option_sensitivity = ttk.OptionMenu(frame_setting, value2, *sensitivity, command = senseMethod)
     option_dac = ttk.OptionMenu(frame_setting, value3, *dac, command = dacMethod)
     option_dacx = ttk.OptionMenu(frame_setting, value4, *dacx, command = dacxMethod)
 
     listbox_l = Listbox(frame_information,height=5)
     scrollbar_s = ttk.Scrollbar(frame_information, orient=VERTICAL, command=listbox_l.yview)
 
-    #Save File Name
+    #Save Labels
     label_sample = ttk.Label(frame_information, text = "Sample Name")
 
-    #Function Variables
-    label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
-    label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
+    #Function Labels
     label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
     label_number = ttk.Label(frame_setting, text="Points per scan:")
     label_output = ttk.Label(frame_setting, text="Hz field (Oe):")
     label_average = ttk.Label(frame_setting, text="Averages:")
-    label_signal = ttk.Label(frame_setting, text="Lock-in OSC (V):")
-    label_frequency = ttk.Label(frame_setting, text="Lock-in freq (Hz):")
     label_dac = ttk.Label(frame_setting, text="Hz DAC Channel:")
     label_dacx = ttk.Label(frame_setting, text="Hx DAC Channel:")
     label_current = ttk.Label(frame_setting, text="Current (mA):")
@@ -418,8 +399,8 @@ def createWidgit():
     
     button_measure = ttk.Button(frame_buttomArea, text ="Measure", \
         command = lambda : measureMethod(entry_interval.get(),entry_number.get(),\
-            entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),\
-            entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
+            entry_output.get(),entry_average.get(),entry_current.get(),\
+            entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
@@ -437,38 +418,31 @@ def createWidgit():
     frame_setting.grid(column=3, row=0, columnspan=2, rowspan=30, sticky=(N, S, E, W))
 
     #Frame setting grid
-    label_mode.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
-    option_mode.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
-    label_sensitivity.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
-    option_sensitivity.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
-    label_interval.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
-    entry_interval.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
-    label_number.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
-    entry_number.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
-    label_output.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
-    entry_output.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
-    label_average.grid(column=0, row=11, columnspan=2, sticky=(N, W), padx=5)
-    entry_average.grid(column=0, row=12, columnspan=2, sticky=(N, W), padx=5)
-    label_signal.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
-    entry_signal.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
-    label_frequency.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
-    entry_frequency.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
-    label_dac.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
-    option_dac.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
-    label_dacx.grid(column=0, row=19, columnspan=2, sticky=(N, W), padx=5)
-    option_dacx.grid(column=0, row=20, columnspan=2, sticky=(N, W), padx=5)
-    label_current.grid(column=0, row=21, columnspan=2, sticky=(N, W), padx=5)
-    entry_current.grid(column=0, row=22, columnspan=2, sticky=(N, W), padx=5)
-    label_step.grid(column=0, row=23, columnspan=2, sticky=(N, W), padx=5)
-    entry_step.grid(column=0, row=24, columnspan=2, sticky=(N, W), padx=5)
-    label_Hx.grid(column=0, row=25, columnspan=2, sticky=(N, W), padx=5)
-    entry_Hx.grid(column=0, row=26, columnspan=2, sticky=(N, W), padx=5)
-    label_dHx.grid(column=0, row=27, columnspan=2, sticky=(N, W), padx=5)
-    entry_dHx.grid(column=0, row=28, columnspan=2, sticky=(N, W), padx=5)
-    label_intervalx.grid(column=0, row=29, columnspan=2, sticky=(N, W), padx=5)
-    entry_intervalx.grid(column=0, row=30, columnspan=2, sticky=(N, W), padx=5)
 
-    label_empty.grid(column=0, row=31, columnspan=2, sticky=(N, W), padx=5)
+    label_interval.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
+    entry_interval.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
+    label_number.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
+    entry_number.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
+    label_output.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
+    entry_output.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
+    label_average.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
+    entry_average.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
+    label_dac.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
+    option_dac.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
+    label_dacx.grid(column=0, row=11, columnspan=2, sticky=(N, W), padx=5)
+    option_dacx.grid(column=0, row=12, columnspan=2, sticky=(N, W), padx=5)
+    label_current.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
+    entry_current.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
+    label_step.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
+    entry_step.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
+    label_Hx.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
+    entry_Hx.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
+    label_dHx.grid(column=0, row=19, columnspan=2, sticky=(N, W), padx=5)
+    entry_dHx.grid(column=0, row=20, columnspan=2, sticky=(N, W), padx=5)
+    label_intervalx.grid(column=0, row=21, columnspan=2, sticky=(N, W), padx=5)
+    entry_intervalx.grid(column=0, row=22, columnspan=2, sticky=(N, W), padx=5)
+
+    label_empty.grid(column=0, row=23, columnspan=2, sticky=(N, W), padx=5)
 
 
     frame_information.grid(column=0, row=31,columnspan=3,sticky=(N,W,E,S))
@@ -504,10 +478,7 @@ def createWidgit():
     content.columnconfigure(4, weight=1)
     content.rowconfigure(1, weight=1)
 
+
+
 if __name__ == '__main__':
     main()
-
-
-
-
-

@@ -1,6 +1,5 @@
 
-#********************** 2017/01/30 Version ********************#
-
+#********************** 2017/12/29 Version ********************#
 # Note: Threading added in the measureMethod()
 # Note: The listbox will now always show the latest measured data
 # Note: Threading can avoid non-responsive problem, but will also cause
@@ -8,6 +7,13 @@
 # Note: Keithley current option added.
 # Note: All output will be shut down by clicking quit
 # Note: Create the K2400 current stepping function
+
+#********************** 2018/01/12 Version ********************#
+# Note: Voltage Protection added 2017/12/19
+# Note: Cleaned up code for easier reading
+# Note: Unnecessary variables removed
+# Note: Save function updated to include sample name and initial measured resistance.
+# Note: Read me added
 
 from tkinter import *
 from tkinter import ttk
@@ -69,12 +75,10 @@ screen_height = root.winfo_screenheight()
 
 def main():
 
-    global result, func, average, sense, DAC, DACx, signal, freq, qx, qy, directory, dot_size, dot_edge
+    global result, func, average, sense, DAC, DACx, signal, freq, directory, dot_size, dot_edge
 
     directory = os.getcwd()
 
-    qx = multiprocessing.Queue()
-    qy = multiprocessing.Queue()
 
     func='1st' #Set a default mode (1st or 2nd)
     sense='10mV' #Set a default sensitivity range (mV or uV)
@@ -82,6 +86,11 @@ def main():
     DACx=3 #Set a default DAC output channel for Hx
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
+
+    read_me = 'This program uses Keithley2400 to provide current. The Lock-in Amp provides varying Hz and Hx fields.\
+    The program measures the luminosity change in the area selected by the box from perfSettings.'
+
+    print(read_me)
 
     dot_size=10 #Set a default data dot size
     dot_edge=0.5 #Set a default data dot edge width
@@ -93,8 +102,6 @@ def main():
     createWidgit()
 
     root.protocol('WM_DELETE_WINDOW', quit) 
-    # btn = Button(master = root2, text="Get Coordinates", command=click)
-    # btn.pack()
 
     th2 = threading.Thread(target=perfSettings)
     th2.start()
@@ -102,48 +109,6 @@ def main():
     root.mainloop()
 
 #************************Main End Here***************************#
-
-def updateplot():
-
-    global ax, frame, qx, qy
-
-    try:
-
-        x=qx.get_nowait()
-        y=qy.get_nowait()
-        #print ("%s" %time.ctime(time.time()*1000))
-        if y != 'Q':
-            ax.scatter(x, y, s=50, alpha=0.5)
-            frame.after(1,updateplot)
-
-        else:
-            canvas.draw()
-            print ("done")
-    except:
-        #print ("empty")
-        frame.after(1,updateplot)
-
-
-def measureUpdate(i,lim):
-
-    global qx, qy
-    t=0
-    a=0.0 #initial amplitude
-
-    while t <= lim :
-        #print ("%s" %time.ctime(time.time()*1000-t0))
-        #print ("%.2f" %float(time.time()*1000-t0))
-        amp = lockinAmp()
-        
-        tmp=1000*double(amp.readX(average))
-        qy.put(tmp)
-        qx.put(a)
-        #print(tmp[1])
-        #time.sleep(i/1000)
-        t+=i
-        #print(tmp[1])
-    qy.put('Q')
-    qx.put('Q')
 
 def imageMethod(X1,Y1,X2,Y2):
 
@@ -173,19 +138,20 @@ def imageMethod(X1,Y1,X2,Y2):
     L=R+G+B
     return L
 
-def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx):
+def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx, _sample):
     
-
-    i=float(_inteval)
-    ix=float(_intervalx)
-    n=int(_number)
-    average=int(_average)
-    signal=float(_signal)
-    freq=int(_frequency)
+    #_sample is save file name
+    #_output is max Hz field strength
+    i=float(_interval) # Hz calibration factor
+    ix=float(_intervalx) # Hx calibration factor
+    n=int(_number) # number of points per Hz sweep
+    average=int(_average) # NOT CURRENTLY USED
+    signal=float(_signal) # Lock-In Amp OSC signal voltage (MAX 5)
+    freq=int(_frequency) # Lock-In Amp OSC signal frequency (Hz)
 
     def event():
 
-        Hx_start=float(_Hx)
+        Hx_start=float(_Hx) # Max Hx field strengh
         Hx_end=float(_Hx)*(-1)
         Hx_step=float(_dHx)
 
@@ -196,7 +162,7 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
 
             amp.dacOutput((Hx_start/ix), DACx)
 
-            current_start=float(_current)
+            current_start=float(_current) # Applied current from Keithley2400
             current_end=float(_current)*(-1)
             current_step=float(_step)
     
@@ -232,6 +198,8 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 print("Measured current: %f mA" %(1000*data[2]))
                 print("Measured voltage: %f V" %data[1])
                 print("Measured resistance: %f Ohm" %(data[1]/data[2]))
+
+                save = (data[1]/data[2])
 
                 #Setup lock-in for dac (Hz field) output
                 t=0
@@ -283,12 +251,13 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                     a+=step
                     listbox_l.see(END)
 
-                #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
-                #canvas.draw()
+
                 stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-                file = open(str(directory)+"/sample_name_"+str(Hx_start)+"Oe_"+str(current_start)+"mA"+"_"+str(stamp), "w")
+                file = open(str(directory)+"/"+str(_sample)+"_"+str(Hx_start)+"Oe_"+str(current_start)+"mA_"+str(save)+"Ohm_"+str(stamp), "w")
+                file.write(str(_sample)+"\n")
                 file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n")
-                file.write("Applied current: "+str(current_start)+"(mA)\n\n")
+                file.write("Applied current: "+str(current_start)+"(mA)\n")
+                file.write("Initial resistance: "+str(save)+"Ohm_\n\n")
                 file.write("Number"+" "+"Field(Oe)"+" "+"Voltage(mV)"+"\n")
 
                 cnt=1
@@ -316,9 +285,16 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
         listbox_l.insert('end',"Measurement finished")
         listbox_l.see(END)
 
-    th = threading.Thread(target=event)
-    th.start()
+    if (double(_output)/i)< 1 and (float(_Hx)/ix)<12:
+        
+        th = threading.Thread(target=event)
+        th.start()
 
+    else:
+        
+        listbox_l.insert('end',"Your output field is TOO LARGE!")
+        listbox_l.see(END)
+        print("Your output field is TOO LARGE!")
 
 # Option:1st or 2nd harmonic
 def optionMethod(val):
@@ -360,44 +336,6 @@ def dacxMethod(val):
     print("Don't forget to change the calibration factor H(Oe)/DAC(V)")
 
 
-#def keithOutMethod(val):
-#
-#    
-#    keith=Keithley2400(f)
-#    
-#    if val =='ON':
-#        keith.outputOn()
-#
-#    else:
-#        keith.outputOff()
-        
-    
-
-def saveMethod():
-
-    global result
-
-    if result == ['']:
-        listbox_l.insert('end', "No Data can save.")
-        listbox_l.see(END)
-
-    else:
-
-        f =  filedialog.asksaveasfile(mode='w', defaultextension=".txt")
-
-        f.write(func+":\n\n")
-        cnt=1
-        #output all data 
-        for a in range(len(values_y)):
-
-               f.write(str(cnt)+" "+str(values_x[a])+" "+str(values_y[a])+"\n")
-               cnt +=1
-
-        f.closed
-
-        listbox_l.insert('end', "The Measurement Data is saved.")
-        listbox_l.see(END)
-
 def dirMethod():
 
     global directory
@@ -423,7 +361,7 @@ def outputMethod(_interval, _output, _signal, _frequency):
         listbox_l.insert('end', "Single output field: "+_output+" Oe.")
         listbox_l.see(END)
     else:
-        listbox_l.insert('end', "\""+_output+"\" is not a valid ouput value.")
+        listbox_l.insert('end', "\""+_output+"\" is not a valid output value.")
         listbox_l.see(END)
 
 def clearMethod():
@@ -482,6 +420,10 @@ def createWidgit():
     frame_information = ttk.Frame(content, padding = (3,3,12,12)) 
     frame_buttomArea = ttk.Frame(content)
 
+    #Save Variables
+    entry_sample = ttk.Entry(frame_information); entry_sample.insert(0, "sample name")
+
+    #Function Variables
     entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
     entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
     entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
@@ -512,6 +454,10 @@ def createWidgit():
     listbox_l = Listbox(frame_information,height=5)
     scrollbar_s = ttk.Scrollbar(frame_information, orient=VERTICAL, command=listbox_l.yview)
 
+    #Save settings
+    label_sample = ttk.Label(frame_information, text = "Sample Name")
+
+    #Function settings
     label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
     label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
     label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
@@ -530,11 +476,15 @@ def createWidgit():
     label_empty = ttk.Label(frame_setting, text="")
     
     
-    button_measure = ttk.Button(frame_buttomArea, text ="Measure", command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get()))
+    button_measure = ttk.Button(frame_buttomArea, text ="Measure", \
+        command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),\
+            entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),\
+            entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
-    button_output = ttk.Button(frame_buttomArea, text="Output", command = lambda : outputMethod(entry_interval.get(),entry_output.get(),entry_signal.get(),entry_frequency.get()))
+    button_output = ttk.Button(frame_buttomArea, text="Output", \
+        command = lambda : outputMethod(entry_interval.get(),entry_output.get(),entry_signal.get(),entry_frequency.get()))
     button_clear = ttk.Button(frame_buttomArea, text="Clear", command = clearMethod)
 
     #Attatch Plot 
@@ -590,7 +540,9 @@ def createWidgit():
 
     frame_information.grid_columnconfigure(0, weight=1)
     frame_information.grid_rowconfigure(0, weight=1)
-    
+
+    label_sample.grid(column=0, row=2, columnspan=1, sticky=(N,W,E,S), padx=5)
+    entry_sample.grid(column=0, row=3, columnspan=1, sticky=(N,W,E,S), padx=5)   
 
     frame_buttomArea.grid(column =3, row=31,columnspan=2,sticky=(N, S, E, W))
 
