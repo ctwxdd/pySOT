@@ -1,6 +1,5 @@
 
 #********************** 2017/01/30 Version ********************#
-
 # Note: Threading added in the measureMethod()
 # Note: The listbox will now always show the latest measured data
 # Note: Threading can avoid non-responsive problem, but will also cause
@@ -8,6 +7,16 @@
 # Note: Keithley current option added.
 # Note: All output will be shut down by clicking quit
 # Note: Create the K2400 current stepping function
+
+#********************** 2018/01/11 Version ********************#
+# Note: Added comments for clarity
+# Note: Cleaned up code for easier reading
+# Note: Unnecessary variables removed
+# Note: Hz options removed from measureMethod and commented out of GUI
+# Note: outputMethod now outputs Hx field, not Hz
+# Note: Amplifier protect added
+# Note: Save function updated to include sample name
+# Note: Read me added
 
 from tkinter import *
 from tkinter import ttk
@@ -68,12 +77,10 @@ screen_height = root.winfo_screenheight()
 
 def main():
 
-    global result, func, average, sense, DAC, DACx, signal, freq, qx, qy, directory
+    global result, func, average, sense, DAC, DACx, signal, freq, directory
 
     directory = os.getcwd()
 
-    qx = multiprocessing.Queue()
-    qy = multiprocessing.Queue()
 
     func='1st' #Set a default mode (1st or 2nd)
     sense='10mV' #Set a default sensitivity range (mV or uV)
@@ -81,7 +88,12 @@ def main():
     DACx=3 #Set a default DAC output channel for Hx
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
-    
+
+    read_me = 'This program uses Keithley2400 to provide current. The Lock-in Amp provides varying Hx fields.\
+    The program measures the luminosity change in the area selected by the box from perfSettings.'
+
+    print(read_me)
+
     result=['']
     values_y=[]
     values_x=[]
@@ -98,48 +110,6 @@ def main():
     root.mainloop()
 
 #************************Main End Here***************************#
-
-def updateplot():
-
-    global ax, frame, qx, qy
-
-    try:
-
-        x=qx.get_nowait()
-        y=qy.get_nowait()
-        #print ("%s" %time.ctime(time.time()*1000))
-        if y != 'Q':
-            ax.scatter(x, y, s=50, alpha=0.5)
-            frame.after(1,updateplot)
-
-        else:
-            canvas.draw()
-            print ("done")
-    except:
-        #print ("empty")
-        frame.after(1,updateplot)
-
-
-def measureUpdate(i,lim):
-
-    global qx, qy
-    t=0
-    a=0.0 #initial amplitude
-
-    while t <= lim :
-        #print ("%s" %time.ctime(time.time()*1000-t0))
-        #print ("%.2f" %float(time.time()*1000-t0))
-        amp = lockinAmp()
-        
-        tmp=1000*double(amp.readX(average))
-        qy.put(tmp)
-        qx.put(a)
-        #print(tmp[1])
-        #time.sleep(i/1000)
-        t+=i
-        #print(tmp[1])
-    qy.put('Q')
-    qx.put('Q')
 
 def imageMethod(X1,Y1,X2,Y2):
 
@@ -169,19 +139,19 @@ def imageMethod(X1,Y1,X2,Y2):
     L=R+G+B
     return L
 
-def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx):
+# Keithley2400 current loop over a set of Hx values. Measures luminosity changes
+def measureMethod(_average, _current, _step, _Hx, _dHx, _intervalx, _sample):
     
+    global freq, signal
 
-    i=float(_inteval)
-    ix=float(_intervalx)
-    n=int(_number)
-    average=int(_average)
-    signal=float(_signal)
-    freq=int(_frequency)
+    #_sample is save file name
+    ix=float(_intervalx) # Hx calibration factor
+    average=int(_average) #NOT CURRENTLY USED
+
 
     def event():
 
-        Hx_start=float(_Hx)
+        Hx_start=float(_Hx) # Max Hx field strength
         Hx_end=float(_Hx)*(-1)
         Hx_step=float(_dHx)
 
@@ -192,11 +162,10 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
 
             amp.dacOutput((Hx_start/ix), DACx)
 
-            current_max=float(_current)
+            current_max=float(_current) # Max currently supplied by Keithley2400
             current_min=float(_current)*(-1)
             current_step=float(_step)
     
-            #while current_start>=current_end:
 
             ax.clear()
             ax.grid(True)
@@ -272,10 +241,10 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
                 current+=current_step
                 listbox_l.see(END)
 
-            #scat=ax.scatter(values_x, values_y, s=50, alpha=0.5)
-            #canvas.draw()
+
             stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-            file = open(str(directory)+"/sample_name_switching"+str(Hx_start)+"Oe"+"_"+str(stamp), "w")
+            file = open(str(directory)+"/"+str(_sample)+"_switching"+str(Hx_start)+"Oe"+"_"+str(stamp), "w")
+            file.write(str(_sample)+"\n")
             file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n\n")
             file.write("Number"+" "+"Field(Oe)"+" "+"MOKE signal(RGB)"+"\n")
 
@@ -302,9 +271,16 @@ def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _cu
         listbox_l.insert('end',"Measurement finished")
         listbox_l.see(END)
 
-    th = threading.Thread(target=event)
-    th.start()
+    if (float(_Hx)/ix)<12:
+        
+        th = threading.Thread(target=event)
+        th.start()
 
+    else:
+        
+        listbox_l.insert('end',"Your output field is TOO LARGE!")
+        listbox_l.see(END)
+        print("Your output field is TOO LARGE!")
 
 # Option:1st or 2nd harmonic
 def optionMethod(val):
@@ -345,45 +321,6 @@ def dacxMethod(val):
     print("DAC channel for Hx:",DACx)
     print("Don't forget to change the calibration factor H(Oe)/DAC(V)")
 
-
-#def keithOutMethod(val):
-#
-#    
-#    keith=Keithley2400(f)
-#    
-#    if val =='ON':
-#        keith.outputOn()
-#
-#    else:
-#        keith.outputOff()
-        
-    
-
-def saveMethod():
-
-    global result
-
-    if result == ['']:
-        listbox_l.insert('end', "No Data can save.")
-        listbox_l.see(END)
-
-    else:
-
-        f =  filedialog.asksaveasfile(mode='w', defaultextension=".txt")
-
-        f.write(func+":\n\n")
-        cnt=1
-        #output all data 
-        for a in range(len(values_y)):
-
-               f.write(str(cnt)+" "+str(values_x[a])+" "+str(values_y[a])+"\n")
-               cnt +=1
-
-        f.closed
-
-        listbox_l.insert('end', "The Measurement Data is saved.")
-        listbox_l.see(END)
-
 def dirMethod():
 
     global directory
@@ -394,11 +331,12 @@ def dirMethod():
     listbox_l.see(END)
 
 
-def outputMethod(_interval, _output, _signal, _frequency):
+def outputMethod(_interval, _output):
+
+    global signal, freq
 
     i=float(_interval)
-    signal=float(_signal)
-    freq=int(_frequency)
+
     
     amp = lockinAmp(func, sense, signal, freq)
     
@@ -406,10 +344,10 @@ def outputMethod(_interval, _output, _signal, _frequency):
         #print(entry_output.get())
         amp.dacOutput((double(_output)/i), DAC)
 
-        listbox_l.insert('end', "Single output field: "+_output+" Oe.")
+        listbox_l.insert('end', "Single output Hx field: "+_output+" Oe.")
         listbox_l.see(END)
     else:
-        listbox_l.insert('end', "\""+_output+"\" is not a valid ouput value.")
+        listbox_l.insert('end', "\""+_output+"\" is not a valid Hx output value.")
         listbox_l.see(END)
 
 def clearMethod():
@@ -468,44 +406,52 @@ def createWidgit():
     frame_information = ttk.Frame(content, padding = (3,3,12,12)) 
     frame_buttomArea = ttk.Frame(content)
 
-    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
-    entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"429.82")
-    entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
+    #Save Variables
+    entry_sample = ttk.Entry(frame_information); entry_sample.insert(0, "sample name")
+
+    #Function Variables
+    #entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
+    #entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
+    #entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
     entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"3")
-    entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
-    entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
+    #entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
+    #entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
     entry_current = ttk.Entry(frame_setting); entry_current.insert(0,"0")
     entry_step = ttk.Entry(frame_setting); entry_step.insert(0,"0.5")
     entry_Hx = ttk.Entry(frame_setting); entry_Hx.insert(0,"0")
     entry_dHx = ttk.Entry(frame_setting); entry_dHx.insert(0,"100")
     entry_intervalx = ttk.Entry(frame_setting);entry_intervalx.insert(0,"396.59")
 
-    value = tkinter.StringVar() #mode
-    value2 = tkinter.StringVar() #sensitivity
-    value3 = tkinter.IntVar() #dac
+    #value = tkinter.StringVar() #mode
+    #value2 = tkinter.StringVar() #sensitivity
+    #value3 = tkinter.IntVar() #dac
     value4 = tkinter.StringVar() #keithOut
 
-    mode = ["1st","1st","2nd"]
-    sensitivity = ["10mV","1mV","2mV","5mV","10mV","20mV","50mV","100mV","200mV","10uV","20uV","50uV","100uV"]
-    dac = [2,1,2,3,4]
+    #mode = ["1st","1st","2nd"]
+    #sensitivity = ["10mV","1mV","2mV","5mV","10mV","20mV","50mV","100mV","200mV","10uV","20uV","50uV","100uV"]
+    #dac = [2,1,2,3,4]
     dacx = [3,1,2,3,4]
 
-    option_mode = ttk.OptionMenu(frame_setting, value, *mode, command = optionMethod)
-    option_sensitivity = ttk.OptionMenu(frame_setting, value2, *sensitivity, command = senseMethod)
-    option_dac = ttk.OptionMenu(frame_setting, value3, *dac, command = dacMethod)
+    #option_mode = ttk.OptionMenu(frame_setting, value, *mode, command = optionMethod)
+    #option_sensitivity = ttk.OptionMenu(frame_setting, value2, *sensitivity, command = senseMethod)
+    #option_dac = ttk.OptionMenu(frame_setting, value3, *dac, command = dacMethod)
     option_dacx = ttk.OptionMenu(frame_setting, value4, *dacx, command = dacxMethod)
 
     listbox_l = Listbox(frame_information,height=5)
     scrollbar_s = ttk.Scrollbar(frame_information, orient=VERTICAL, command=listbox_l.yview)
 
-    label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
-    label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
-    label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
-    label_number = ttk.Label(frame_setting, text="Points per scan:")
-    label_output = ttk.Label(frame_setting, text="Hz field (Oe):")
+    #Save settings
+    label_sample = ttk.Label(frame_information, text = "Sample Name")
+
+    #Function settings
+    #label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
+    #label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
+    #label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
+    #label_number = ttk.Label(frame_setting, text="Points per scan:")
+    #label_output = ttk.Label(frame_setting, text="Hz field (Oe):")
     label_average = ttk.Label(frame_setting, text="Averages:")
-    label_signal = ttk.Label(frame_setting, text="Lock-in OSC (V):")
-    label_frequency = ttk.Label(frame_setting, text="Lock-in freq (Hz):")
+    #label_signal = ttk.Label(frame_setting, text="Lock-in OSC (V):")
+    #label_frequency = ttk.Label(frame_setting, text="Lock-in freq (Hz):")
     label_dac = ttk.Label(frame_setting, text="Hz DAC Channel:")
     label_dacx = ttk.Label(frame_setting, text="Hx DAC Channel:")
     label_current = ttk.Label(frame_setting, text="Current (mA):")
@@ -516,11 +462,13 @@ def createWidgit():
     label_empty = ttk.Label(frame_setting, text="")
     
     
-    button_measure = ttk.Button(frame_buttomArea, text ="Measure", command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get()))
+    button_measure = ttk.Button(frame_buttomArea, text ="Measure", \
+        command = lambda : measureMethod(entry_average.get(),\
+            entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get(),entry_sample.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
-    button_output = ttk.Button(frame_buttomArea, text="Output", command = lambda : outputMethod(entry_interval.get(),entry_output.get(),entry_signal.get(),entry_frequency.get()))
+    button_output = ttk.Button(frame_buttomArea, text="Output", command = lambda : outputMethod(entry_intervalx.get(),entry_Hx.get()))
     button_clear = ttk.Button(frame_buttomArea, text="Clear", command = clearMethod)
 
     #Attatch Plot 
@@ -533,24 +481,24 @@ def createWidgit():
     frame_setting.grid(column=3, row=0, columnspan=2, rowspan=30, sticky=(N, S, E, W))
 
     #Frame setting grid
-    label_mode.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
-    option_mode.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
-    label_sensitivity.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
-    option_sensitivity.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
-    label_interval.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
-    entry_interval.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
-    label_number.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
-    entry_number.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
-    label_output.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
-    entry_output.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
+    #label_mode.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
+    #option_mode.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
+    #label_sensitivity.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
+    #option_sensitivity.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
+    #label_interval.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
+    #entry_interval.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
+    #label_number.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
+    #entry_number.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
+    #label_output.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
+    #entry_output.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
     label_average.grid(column=0, row=11, columnspan=2, sticky=(N, W), padx=5)
     entry_average.grid(column=0, row=12, columnspan=2, sticky=(N, W), padx=5)
-    label_signal.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
-    entry_signal.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
-    label_frequency.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
-    entry_frequency.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
-    label_dac.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
-    option_dac.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
+    #label_signal.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
+    #entry_signal.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
+    #label_frequency.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
+    #entry_frequency.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
+    #label_dac.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
+    #option_dac.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
     label_dacx.grid(column=0, row=19, columnspan=2, sticky=(N, W), padx=5)
     option_dacx.grid(column=0, row=20, columnspan=2, sticky=(N, W), padx=5)
     label_current.grid(column=0, row=21, columnspan=2, sticky=(N, W), padx=5)
@@ -573,6 +521,9 @@ def createWidgit():
     scrollbar_s.grid(column=1, row=0, sticky=(N,S))
 
     listbox_l['yscrollcommand'] = scrollbar_s.set
+
+    label_sample.grid(column=0, row=2, columnspan=1, sticky=(N,W,E,S), padx=5)
+    entry_sample.grid(column=0, row=3, columnspan=1, sticky=(N,W,E,S), padx=5)
 
     frame_information.grid_columnconfigure(0, weight=1)
     frame_information.grid_rowconfigure(0, weight=1)
