@@ -15,6 +15,10 @@
 # Note: Save function updated to include sample name and initial measured resistance.
 # Note: Read me added
 
+#********************** 2018/01/23 Version ********************#
+# Note: Quit function updated to close out 
+# Note: Threading fixed to make threads Daemons
+
 from tkinter import *
 from tkinter import ttk
 import tkinter
@@ -104,6 +108,7 @@ def main():
     root.protocol('WM_DELETE_WINDOW', quit) 
 
     th2 = threading.Thread(target=perfSettings)
+    th2.daemon = True
     th2.start()
 
     root.mainloop()
@@ -288,6 +293,7 @@ def measureMethod(_interval, _number, _output, _average, _signal, _frequency, _c
     if (double(_output)/i)< 1 and (float(_Hx)/ix)<12:
         
         th = threading.Thread(target=event)
+        th.daemon = True
         th.start()
 
     else:
@@ -396,7 +402,8 @@ def quitMethod():
     
     global root
 
-    root.quit()
+    root.destroy()
+    sys.exit()
 
 def createWidgit():
 
