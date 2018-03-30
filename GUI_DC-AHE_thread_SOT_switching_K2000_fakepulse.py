@@ -1,5 +1,5 @@
 
-#********************** 2017/12/29 Version ********************#
+#********************** 2017/01/30 Version ********************#
 
 # Note: Threading added in the measureMethod()
 # Note: The listbox will now always show the latest measured data
@@ -8,22 +8,6 @@
 # Note: Keithley current option added.
 # Note: All output will be shut down by clicking quit
 # Note: Create the K2400 current stepping function
-# Note: Voltage Protection added
-
-#******************** 2017/07/16 K2400 pulse ******************#
-
-# Note: Re-desgin pannel such that one can input pulse parameters
-# Note: Remove lock-in stuff
-
-#********************** 2018/01/12 Version ********************#
-# Note: Cleaned up code for easier reading
-# Note: Unnecessary variables removed
-# Note: Amplifier protection added
-# Note: Lock-in stuff removed
-# Note: Hz removed from measureMethod, Hz options commented out of GUI
-# Note: outputMethod is Hz
-# Note: Save function updated to include sample name and initial measured resistance.
-# Note: Read me added
 
 from tkinter import *
 from tkinter import ttk
@@ -38,8 +22,8 @@ import os
 import math
 import numpy
 from LockinAmp import lockinAmp
-from keithley import Keithley
 from keithley2400_I import Keithley2400
+from keithley import Keithley
 import time
 import multiprocessing
 import threading
@@ -49,9 +33,12 @@ root = Tk()
 
 def main():
 
-    global result, func, average, sense, DAC, DACx, signal, freq, directory, dot_size, dot_edge
+    global result, func, average, sense, DAC, DACx, signal, freq, qx, qy, directory, dot_size, dot_edge
 
     directory = os.getcwd()
+
+    qx = multiprocessing.Queue()
+    qy = multiprocessing.Queue()
 
     func='1st' #Set a default mode (1st or 2nd)
     sense='10mV' #Set a default sensitivity range (mV or uV)
@@ -59,11 +46,6 @@ def main():
     DACx=3 #Set a default DAC output channel for Hx
     signal=1 #Set a default OSC signal voltage (V)
     freq=1171 #Set a default OSC frequency (Hz)
-
-    read_me = 'This program uses Keithley2000 to run varying strength current pulses to the sample AND to measure SOT switching of the sample. \
-    A Lock-in Amp is used to generate varying Hx fields to test current switching in. Hz is currently not used.'
-
-    print(read_me)
 
     dot_size=10 #Set a default data dot size
     dot_edge=0.5 #Set a default data dot edge width
@@ -79,20 +61,67 @@ def main():
 
 #************************Main End Here***************************#
 
-#Runs varying strength current pulses using Keithley2000 over a range of Hx fields. 
-def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, _sensewidth, _switchsense, _period, _sample):
+def updateplot():
+
+    global ax, frame, qx, qy
+
+    try:
+
+        x=qx.get_nowait()
+        y=qy.get_nowait()
+        #print ("%s" %time.ctime(time.time()*1000))
+        if y != 'Q':
+            ax.scatter(x, y, s=50, alpha=0.5)
+            frame.after(1,updateplot)
+
+        else:
+            canvas.draw()
+            print ("done")
+    except:
+        #print ("empty")
+        frame.after(1,updateplot)
+
+
+def measureUpdate(i,lim):
+
+    global qx, qy
+    t=0
+    a=0.0 #initial amplitude
+
+    while t <= lim :
+        #print ("%s" %time.ctime(time.time()*1000-t0))
+        #print ("%.2f" %float(time.time()*1000-t0))
+        amp = lockinAmp()
+        
+        tmp=1000*double(amp.readX(average))
+        qy.put(tmp)
+        qx.put(a)
+        #print(tmp[1])
+        #time.sleep(i/1000)
+        t+=i
+        #print(tmp[1])
+    qy.put('Q')
+    qx.put('Q')
+
+
+def measureMethod(_inteval, _number, _output, _average, _signal, _frequency, _current, _step, _Hx, _dHx, _intervalx):
     
-    #i=float(_interval) #Hz calibration factor
-    ix=float(_intervalx) #Hx calibration factor
+
+    i=float(_inteval)
+    ix=float(_intervalx)
+    n=int(_number)
+    average=int(_average)
+    signal=float(_signal)
+    freq=int(_frequency)
 
     def event():
 
-        Hx_start=float(_Hx) #Hx starting field
-        Hx_end=float(_Hx)*(-1) #Hx ending field
-        Hx_step=float(_dHx) #Hx step
+        Hx_start=float(_Hx)
+        Hx_end=float(_Hx)*(-1)
+        Hx_step=float(_dHx)
 
-        keith2000=Keithley(f) #Initiate K2000
         keith=Keithley2400(f) #Initiate K2400
+        keith2000=Keithley(f) #Initiate K2000
         amp = lockinAmp(func, sense, signal, freq) #Initiate Lock-in
 
         while Hx_start>=Hx_end:
@@ -122,12 +151,8 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
             result=[]
             
             #Setup K2400 for current output and resistance measurement
-
-            current=0 #starting current amplitude
-            current_sense=float(_sense) #sensing current amplitude (mA)
-
-            keith.fourWireOff() #Set 2-wire mode
-            keith.setCurrent(current_sense) #Use 2-wire method to measure DC resistance 
+            keith.fourWireOff()
+            keith.setCurrent(0.1) #Use 0.1mA to measure DC resistance 
             keith.outputOn()
 
             index=1
@@ -141,15 +166,17 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
             print("Measured voltage: %f V" %data[1])
             print("Measured resistance: %f Ohm" %(data[1]/data[2]))
 
-            save = (data[1]/data[2])
-
             keith.outputOff()
 
+            #Setup Keithley for Idc sweep
+            current=0 #starting current amplitude
+            current_sense=0.01 #sensing current amplitude 0.1mA
+
             #Pulse train parameters
-            write_pulse_width=float(_switchwidth) #switching pulse width
-            read_pulse_width=float(_sensewidth) #sensing pulse width
-            write_read_pause=float(_switchsense) #interval between switching and sesnsing pulses
-            period=float(_period) #interval between stepping events
+            write_pulse_width=0.05
+            read_pulse_width=0.05
+            write_read_pause=0.05
+            period=0.05
 
             keith.outputOn()
     
@@ -164,13 +191,13 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
                 time.sleep(write_read_pause)
 
                 #keith.outputOn()
-                keith.setCurrent(current_sense) # Set sensing current
+                keith.setCurrent(current_sense) # Set sensing current to 0.1mA
                 time.sleep(read_pulse_width)
                 data=keith2000.measureOnce()
                 keith.setCurrent(0) # Reduce current amplitude to zero
                 #keith.outputOff()
                 
-                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / sensing current
+                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / 0.1mA
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(current)
@@ -194,13 +221,13 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
                 time.sleep(write_read_pause)
 
                 #keith.outputOn()
-                keith.setCurrent(current_sense) # Set sensing current
+                keith.setCurrent(current_sense) # Set sensing current to 0.1mA
                 time.sleep(read_pulse_width)
                 data=keith2000.measureOnce()
                 keith.setCurrent(0) # Reduce current amplitude to zero
                 #keith.outputOff()
                 
-                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / sensing current
+                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / 0.1mA
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(current)
@@ -224,13 +251,13 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
                 time.sleep(write_read_pause)
 
                 #keith.outputOn()
-                keith.setCurrent(current_sense) # Set sensing current
+                keith.setCurrent(current_sense) # Set sensing current to 0.1mA
                 time.sleep(read_pulse_width)
                 data=keith2000.measureOnce()
                 keith.setCurrent(0) # Reduce current amplitude to zero
                 #keith.outputOff()
                 
-                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / sensing current
+                tmp=double(1000*data[1]/current_sense) # Voltage from K2000 / 0.1mA
                 result.append(tmp)
                 values_y.append(tmp)
                 values_x.append(current)
@@ -249,10 +276,8 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
             stamp = datetime.now().strftime('%Y-%m-%d-%H%M%S')
             listbox_l.insert('end', str(stamp))
 
-            file = open(str(directory)+'/'+str(_sample)+"SOT_switching_"+str(Hx_start)+"Oe_"+str(stamp), "w")
-            file.write("" + str(_sample) + "\n")
+            file = open(str(directory)+"/MR_STT_switching_"+str(Hx_start)+"Oe_"+str(stamp), "w")
             file.write("Applied in-plane field: "+str(Hx_start)+"(Oe)\n\n")
-            file.write("Initial resistance: "+str(save)+"Ohm \n")
             file.write("Number"+" "+"Current(mA)"+" "+"Resistance(Ohm)"+"\n")
 
             cnt=1
@@ -282,16 +307,28 @@ def measureMethod(_current, _step, _Hx, _dHx, _intervalx, _sense, _switchwidth, 
         listbox_l.insert('end',"Measurement finished")
         listbox_l.see(END)
 
-    if (float(_Hx)/ix)<12:
-        
-        th = threading.Thread(target=event)
-        th.start()
+    th = threading.Thread(target=event)
+    th.start()
 
-    else:
-        
-        listbox_l.insert('end',"Your output field is TOO LARGE!")
-        listbox_l.see(END)
-        print("Your output field is TOO LARGE!")
+
+# Option:1st or 2nd harmonic
+def optionMethod(val):
+
+    global func 
+
+    func = val
+
+    print("Detecting the %s harmonic voltage" %func)
+    
+
+# Sensitivity: How many mVs or uVs
+def senseMethod(val):
+
+    global sense 
+
+    sense = val
+
+    print("Sensing range set to:",sense)
 
 # DAC: Which DAC output channel for Hz (Out-of-plane field)
 def dacMethod(val):
@@ -314,6 +351,44 @@ def dacxMethod(val):
     print("Don't forget to change the calibration factor H(Oe)/DAC(V)")
 
 
+#def keithOutMethod(val):
+#
+#    
+#    keith=Keithley2400(f)
+#    
+#    if val =='ON':
+#        keith.outputOn()
+#
+#    else:
+#        keith.outputOff()
+        
+    
+
+def saveMethod():
+
+    global result
+
+    if result == ['']:
+        listbox_l.insert('end', "No Data can save.")
+        listbox_l.see(END)
+
+    else:
+
+        f =  filedialog.asksaveasfile(mode='w', defaultextension=".txt")
+
+        f.write(func+":\n\n")
+        cnt=1
+        #output all data 
+        for a in range(len(values_y)):
+
+               f.write(str(cnt)+" "+str(values_x[a])+" "+str(values_y[a])+"\n")
+               cnt +=1
+
+        f.closed
+
+        listbox_l.insert('end', "The Measurement Data is saved.")
+        listbox_l.see(END)
+
 def dirMethod():
 
     global directory
@@ -323,21 +398,23 @@ def dirMethod():
     listbox_l.insert('end', directory)
     listbox_l.see(END)
 
-#outputs Hx field!
-def outputMethod(_interval, _output):
+
+def outputMethod(_interval, _output, _signal, _frequency):
 
     i=float(_interval)
+    signal=float(_signal)
+    freq=int(_frequency)
     
     amp = lockinAmp(func, sense, signal, freq)
     
-    if _output.replace('.','').replace('-','').isdigit() and double(_output)/i < 1 :
+    if _output.replace('.','').replace('-','').isdigit() :
         #print(entry_output.get())
         amp.dacOutput((double(_output)/i), DAC)
 
-        listbox_l.insert('end', "Single output Hz field: "+_output+" Oe.")
+        listbox_l.insert('end', "Single output field: "+_output+" Oe.")
         listbox_l.see(END)
     else:
-        listbox_l.insert('end', "\""+_output+"\" is not a valid Hz output value.")
+        listbox_l.insert('end', "\""+_output+"\" is not a valid ouput value.")
         listbox_l.see(END)
 
 def clearMethod():
@@ -361,6 +438,10 @@ def quitMethod():
     amp.dacOutput(0, 2)
     amp.dacOutput(0, 3)
     amp.dacOutput(0, 4)
+
+    #keith=Keithley2400(f)
+    #keith.setCurrent(0.1)
+    #keith.outputOff()
 
     listbox_l.insert('end', "All fields set to zero.")
     listbox_l.see(END)
@@ -392,59 +473,59 @@ def createWidgit():
     frame_information = ttk.Frame(content, padding = (3,3,12,12)) 
     frame_buttomArea = ttk.Frame(content)
 
-    #Save Variables
-    entry_sample = ttk.Entry(frame_information); entry_sample.insert(0, "sample name")
-
-    #Function Variables
+    entry_number = ttk.Entry(frame_setting); entry_number.insert(0,"10")
     entry_interval = ttk.Entry(frame_setting);entry_interval.insert(0,"1022")
     entry_output = ttk.Entry(frame_setting); entry_output.insert(0,"200")
-    entry_sense = ttk.Entry(frame_setting); entry_sense.insert(0,"1") #K2400 sensing current
+    entry_average = ttk.Entry(frame_setting); entry_average.insert(0,"3")
+    entry_signal = ttk.Entry(frame_setting); entry_signal.insert(0,"1")
+    entry_frequency = ttk.Entry(frame_setting); entry_frequency.insert(0,"1171")
     entry_current = ttk.Entry(frame_setting); entry_current.insert(0,"0")
     entry_step = ttk.Entry(frame_setting); entry_step.insert(0,"0.5")
     entry_Hx = ttk.Entry(frame_setting); entry_Hx.insert(0,"0")
     entry_dHx = ttk.Entry(frame_setting); entry_dHx.insert(0,"100")
     entry_intervalx = ttk.Entry(frame_setting);entry_intervalx.insert(0,"396.59")
-    entry_switch_width = ttk.Entry(frame_setting);entry_switch_width.insert(0,"0.05")
-    entry_sense_width = ttk.Entry(frame_setting);entry_sense_width.insert(0,"0.05")
-    entry_switch_sense = ttk.Entry(frame_setting);entry_switch_sense.insert(0,"0.05")
-    entry_period = ttk.Entry(frame_setting);entry_period.insert(0,"0.05")
 
+    value = tkinter.StringVar() #mode
+    value2 = tkinter.StringVar() #sensitivity
     value3 = tkinter.IntVar() #dac
-    value4 = tkinter.IntVar() #dacx
+    value4 = tkinter.StringVar() #keithOut
 
+    mode = ["1st","1st","2nd"]
+    sensitivity = ["10mV","1mV","2mV","5mV","10mV","20mV","50mV","100mV","200mV","10uV","20uV","50uV","100uV"]
     dac = [2,1,2,3,4]
     dacx = [3,1,2,3,4]
 
+    option_mode = ttk.OptionMenu(frame_setting, value, *mode, command = optionMethod)
+    option_sensitivity = ttk.OptionMenu(frame_setting, value2, *sensitivity, command = senseMethod)
     option_dac = ttk.OptionMenu(frame_setting, value3, *dac, command = dacMethod)
     option_dacx = ttk.OptionMenu(frame_setting, value4, *dacx, command = dacxMethod)
 
     listbox_l = Listbox(frame_information,height=5)
     scrollbar_s = ttk.Scrollbar(frame_information, orient=VERTICAL, command=listbox_l.yview)
 
+    label_mode = ttk.Label(frame_setting, text="Harmonic mode:")
+    label_sensitivity = ttk.Label(frame_setting, text="Sensitivity:")
     label_interval = ttk.Label(frame_setting, text="Hz(Oe)/DAC(V):") #calibration factor
+    label_number = ttk.Label(frame_setting, text="Points per scan:")
     label_output = ttk.Label(frame_setting, text="Hz field (Oe):")
-    label_sense = ttk.Label(frame_setting, text="Sense current (mA):")
+    label_average = ttk.Label(frame_setting, text="Averages:")
+    label_signal = ttk.Label(frame_setting, text="Lock-in OSC (V):")
+    label_frequency = ttk.Label(frame_setting, text="Lock-in freq (Hz):")
     label_dac = ttk.Label(frame_setting, text="Hz DAC Channel:")
     label_dacx = ttk.Label(frame_setting, text="Hx DAC Channel:")
-    label_current = ttk.Label(frame_setting, text="Write current (mA):")
+    label_current = ttk.Label(frame_setting, text="Current (mA):")
     label_step = ttk.Label(frame_setting, text="Current step (mA):")
     label_Hx = ttk.Label(frame_setting, text="Hx field (Oe):")
     label_dHx = ttk.Label(frame_setting, text="Hx step (Oe):")
     label_intervalx = ttk.Label(frame_setting, text="Hx(Oe)/DAC(V):")
-    label_switch_width = ttk.Label(frame_setting, text="Write pulse width (s):")
-    label_sense_width = ttk.Label(frame_setting, text="Sense pulse width (s):")
-    label_switch_sense = ttk.Label(frame_setting, text="Write-sense pause (s):")
-    label_period = ttk.Label(frame_setting, text="Period (s):")
     label_empty = ttk.Label(frame_setting, text="")
     
-    button_measure = ttk.Button(frame_buttomArea, text ="Measure",\
-     command = lambda : measureMethod(entry_current.get(),entry_step.get(),entry_Hx.get(),\
-        entry_dHx.get(),entry_intervalx.get(),entry_sense.get(),entry_switch_width.get(),\
-        entry_sense_width.get(),entry_switch_sense.get(),entry_period.get(),entry_sample.get()))
+    
+    button_measure = ttk.Button(frame_buttomArea, text ="Measure", command = lambda : measureMethod(entry_interval.get(),entry_number.get(),entry_output.get(),entry_average.get(),entry_signal.get(),entry_frequency.get(),entry_current.get(),entry_step.get(),entry_Hx.get(),entry_dHx.get(),entry_intervalx.get()))
 
     button_dir  = ttk.Button(frame_buttomArea, text="Change directory", command = dirMethod)
     button_quit = ttk.Button(frame_buttomArea, text="Quit", command = quitMethod)
-    button_output = ttk.Button(frame_buttomArea, text="Output", command = lambda : outputMethod(entry_interval.get(),entry_output.get()))
+    button_output = ttk.Button(frame_buttomArea, text="Output", command = lambda : outputMethod(entry_interval.get(),entry_output.get(),entry_signal.get(),entry_frequency.get()))
     button_clear = ttk.Button(frame_buttomArea, text="Clear", command = clearMethod)
 
     #Attatch Plot 
@@ -457,44 +538,36 @@ def createWidgit():
     frame_setting.grid(column=3, row=0, columnspan=2, rowspan=30, sticky=(N, S, E, W))
 
     #Frame setting grid
-    
-    #Save setings
-    label_sample = ttk.Label(frame_information, text = "Sample Name")
-
-    #Hz settings
-    label_dac.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
-    option_dac.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
-    label_interval.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
-    entry_interval.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
-    label_output.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
-    entry_output.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
-
-    #Hx settings
-    label_dacx.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
-    option_dacx.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
-    label_intervalx.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
-    entry_intervalx.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
-    label_Hx.grid(column=0, row=11, columnspan=2, sticky=(N, W), padx=5)
-    entry_Hx.grid(column=0, row=12, columnspan=2, sticky=(N, W), padx=5)
-    label_dHx.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
-    entry_dHx.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
-
-    #Current settings
-    label_sense.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
-    entry_sense.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
-    label_current.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
-    entry_current.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
-    label_step.grid(column=0, row=19, columnspan=2, sticky=(N, W), padx=5)
-    entry_step.grid(column=0, row=20, columnspan=2, sticky=(N, W), padx=5)
-
-    label_switch_width.grid(column=0, row=21, columnspan=2, sticky=(N, W), padx=5)
-    entry_switch_width.grid(column=0, row=22, columnspan=2, sticky=(N, W), padx=5)
-    label_sense_width.grid(column=0, row=23, columnspan=2, sticky=(N, W), padx=5)
-    entry_sense_width.grid(column=0, row=24, columnspan=2, sticky=(N, W), padx=5)
-    label_switch_sense.grid(column=0, row=25, columnspan=2, sticky=(N, W), padx=5)
-    entry_switch_sense.grid(column=0, row=26, columnspan=2, sticky=(N, W), padx=5)
-    label_period.grid(column=0, row=27, columnspan=2, sticky=(N, W), padx=5)
-    entry_period.grid(column=0, row=28, columnspan=2, sticky=(N, W), padx=5)
+    label_mode.grid(column=0, row=1, columnspan=2, sticky=(N, W), padx=5)
+    option_mode.grid(column=0, row=2, columnspan=2, sticky=(N, W), padx=5)
+    label_sensitivity.grid(column=0, row=3, columnspan=2, sticky=(N, W), padx=5)
+    option_sensitivity.grid(column=0, row=4, columnspan=2, sticky=(N, W), padx=5)
+    label_interval.grid(column=0, row=5, columnspan=2, sticky=(N, W), padx=5)
+    entry_interval.grid(column=0, row=6, columnspan=2, sticky=(N, W), padx=5)
+    label_number.grid(column=0, row=7, columnspan=2, sticky=(N, W), padx=5)
+    entry_number.grid(column=0, row=8, columnspan=2, sticky=(N, W), padx=5)
+    label_output.grid(column=0, row=9, columnspan=2, sticky=(N, W), padx=5)
+    entry_output.grid(column=0, row=10, columnspan=2, sticky=(N, W), padx=5)
+    label_average.grid(column=0, row=11, columnspan=2, sticky=(N, W), padx=5)
+    entry_average.grid(column=0, row=12, columnspan=2, sticky=(N, W), padx=5)
+    label_signal.grid(column=0, row=13, columnspan=2, sticky=(N, W), padx=5)
+    entry_signal.grid(column=0, row=14, columnspan=2, sticky=(N, W), padx=5)
+    label_frequency.grid(column=0, row=15, columnspan=2, sticky=(N, W), padx=5)
+    entry_frequency.grid(column=0, row=16, columnspan=2, sticky=(N, W), padx=5)
+    label_dac.grid(column=0, row=17, columnspan=2, sticky=(N, W), padx=5)
+    option_dac.grid(column=0, row=18, columnspan=2, sticky=(N, W), padx=5)
+    label_dacx.grid(column=0, row=19, columnspan=2, sticky=(N, W), padx=5)
+    option_dacx.grid(column=0, row=20, columnspan=2, sticky=(N, W), padx=5)
+    label_current.grid(column=0, row=21, columnspan=2, sticky=(N, W), padx=5)
+    entry_current.grid(column=0, row=22, columnspan=2, sticky=(N, W), padx=5)
+    label_step.grid(column=0, row=23, columnspan=2, sticky=(N, W), padx=5)
+    entry_step.grid(column=0, row=24, columnspan=2, sticky=(N, W), padx=5)
+    label_Hx.grid(column=0, row=25, columnspan=2, sticky=(N, W), padx=5)
+    entry_Hx.grid(column=0, row=26, columnspan=2, sticky=(N, W), padx=5)
+    label_dHx.grid(column=0, row=27, columnspan=2, sticky=(N, W), padx=5)
+    entry_dHx.grid(column=0, row=28, columnspan=2, sticky=(N, W), padx=5)
+    label_intervalx.grid(column=0, row=29, columnspan=2, sticky=(N, W), padx=5)
+    entry_intervalx.grid(column=0, row=30, columnspan=2, sticky=(N, W), padx=5)
 
     label_empty.grid(column=0, row=31, columnspan=2, sticky=(N, W), padx=5)
 
@@ -505,9 +578,6 @@ def createWidgit():
     scrollbar_s.grid(column=1, row=0, sticky=(N,S))
 
     listbox_l['yscrollcommand'] = scrollbar_s.set
-
-    label_sample.grid(column=0, row=2, columnspan=1, sticky=(N,W,E,S), padx=5)
-    entry_sample.grid(column=0, row=3, columnspan=1, sticky=(N,W,E,S), padx=5)
 
     frame_information.grid_columnconfigure(0, weight=1)
     frame_information.grid_rowconfigure(0, weight=1)

@@ -22,6 +22,7 @@
 # Note: Amplifier protect added.
 # Note: Save function updated to include sample name
 # Note: Read me added
+# Note: Data value changed to match multimeasure for Keithley
 
 
 from tkinter import *
@@ -156,7 +157,7 @@ def measureMethod(_interval, _number, _output, _average, _current, _step, _Hx, _
 
                     amp.dacOutput(a, DAC)
                     data=keith2000.measureMulti(average)
-                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
+                    tmp=double(1000*data/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -172,7 +173,7 @@ def measureMethod(_interval, _number, _output, _average, _current, _step, _Hx, _
 
                     amp.dacOutput(a, DAC)
                     data=keith2000.measureMulti(average)
-                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
+                    tmp=double(1000*data/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)
@@ -188,7 +189,7 @@ def measureMethod(_interval, _number, _output, _average, _current, _step, _Hx, _
 
                     amp.dacOutput(a, DAC)
                     data=keith2000.measureMulti(average)
-                    tmp=double(1000*data[1]/current_start) # Voltage from K2000 / Current from K2400
+                    tmp=double(1000*data/current_start) # Voltage from K2000 / Current from K2400
                     result.append(tmp)
                     values_y.append(tmp)
                     values_x.append(a*i)

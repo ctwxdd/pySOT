@@ -18,6 +18,12 @@
 # Note: Save function updated to include sample name
 # Note: Read me added
 
+
+#********************** 2018/01/23 Version ********************#
+# Note: Quit function updated to close out 
+# Note: Threading fixed to make threads Daemons
+
+
 from tkinter import *
 from tkinter import ttk
 import tkinter
@@ -105,6 +111,9 @@ def main():
     # btn.pack()
 
     th2 = threading.Thread(target=perfSettings)
+
+    th2.daemon = True
+
     th2.start()
 
     root.mainloop()
@@ -147,7 +156,9 @@ def measureMethod(_average, _signal, _frequency, _current, _step,_pulse_length,_
     #i=float(_inteval) # Hz calibration value
     ix=float(_intervalx) # Hx calibration value
     #n=int(_number) # 
-    average=int(_average) # number of measurements averaged by Lock-in Amp
+
+    average=int(_average) # Not currently used
+
     signal=float(_signal) # Lock-in Amp OSC signal voltage (MAX 5)
     freq=int(_frequency) # Lock-in Amp 
 
@@ -170,9 +181,15 @@ def measureMethod(_average, _signal, _frequency, _current, _step,_pulse_length,_
 
             ax.clear()
             ax.grid(True)
+
+            ax.set_title("Realtime MOKE signal vs I Plot")
+            ax.set_xlabel("Applied Current (mA)")
+            ax.set_ylabel("MOKE signal (R+G+B)")
+
             ax.set_title("Realtime Hall voltage vs I Plot")
             ax.set_xlabel("Applied Current (mA)")
             ax.set_ylabel("Lock-In X (mV)")
+
 
             listbox_l.insert('end',"Now measuring with Hx = %f (Oe)" %Hx_start)
             listbox_l.see(END)
@@ -392,7 +409,10 @@ def quitMethod():
     
     global root
 
-    root.quit()
+
+    root.destroy()
+    sys.exit()
+
 
 def createWidgit():
 
